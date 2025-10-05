@@ -9,6 +9,7 @@ import TransactionList from "./components/Transactions/TransactionList";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout/Layout";
+import BankAccountPage from "./pages/BankAccountPage";
 
 function AppRoutes() {
   const { user } = useContext(AuthContext);
@@ -30,6 +31,17 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/bank-account"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BankAccountPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
 
       {/* ✅ User-only routes */}
       <Route
@@ -52,9 +64,10 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+    
       {/* Redirect unknown paths */}
       <Route path="*" element={<Navigate to="/login" />} />
+      
     </Routes>
   );
 }

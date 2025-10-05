@@ -20,7 +20,7 @@ const transactionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['UPI', 'Bank'],
+    enum: ['UPI', 'Bank','Card'],
     required: true,
   },
   status: {

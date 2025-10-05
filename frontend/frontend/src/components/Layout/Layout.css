@@ -1,57 +1,113 @@
+/* ========== Layout Container ========== */
 .layout {
   display: flex;
   height: 100vh;
   background-color: #f4f6f9;
+  font-family: "Inter", sans-serif;
 }
 
+/* ========== Sidebar ========== */
 .sidebar {
-  width: 220px;
+  width: 230px;
   background: #1e1e2f;
   color: white;
-  padding: 20px;
+  padding: 25px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar .logo {
-  font-size: 20px;
-  margin-bottom: 20px;
+  font-size: 22px;
+  margin-bottom: 25px;
   text-align: center;
   font-weight: bold;
   color: #4cafef;
+  letter-spacing: 0.5px;
 }
 
+/* Navigation links */
 .sidebar ul {
   list-style: none;
   padding: 0;
+  margin: 0;
+  flex: 1;
 }
 
 .sidebar ul li {
   margin: 15px 0;
+  transition: all 0.2s ease-in-out;
 }
 
 .sidebar ul li a {
   text-decoration: none;
-  color: white;
+  color: #f2f2f2;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
 }
 
+/* Hover & Active styles */
 .sidebar ul li a:hover {
+  color: #4cafef;
+  background-color: rgba(76, 175, 239, 0.1);
+}
+
+.sidebar ul li a.active {
+  background-color: rgba(76, 175, 239, 0.2);
   color: #4cafef;
 }
 
+/* Logout button */
+.sidebar button {
+  background: #e74c3c;
+  border: none;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 15px;
+  border-radius: 8px;
+  width: 100%;
+  text-align: center;
+  transition: background 0.3s ease;
+}
+
+.sidebar button:hover {
+  background: #c0392b;
+}
+
+/* ========== Content Section ========== */
 .content {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
+/* Header (optional topbar styling) */
 .header {
   background: white;
   padding: 15px 20px;
   border-bottom: 1px solid #ddd;
 }
 
+/* Main content area */
 .main {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+}
+
+/* Scrollbar styling (optional aesthetic) */
+.main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.main::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
 }

@@ -28,6 +28,9 @@ app.get('/api/dashboard', authMiddleware, (req, res) => {
 const paymentRoutes = require('./routes/payment');
 app.use('/api/payment', paymentRoutes);
 
+const bankRoutes = require('./routes/bank');
+app.use('/api/bank', bankRoutes);
+
 // Test Route
 app.get('/', (req, res) => {
     res.send('Backend is running');

@@ -1,15 +1,16 @@
+// backend/routes/auth.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const authMiddleware = require('../middleware/auth');
 
-// Register new user (with optional PIN)
+// Register new user (with optional UPI + PIN)
 router.post('/register', async (req, res) => {
-    const { name, email, password, pin } = req.body;
+    const { name, email, password, upiId, pin } = req.body;
 
     if (!name || !email || !password) {
-        return res.status(400).json({ message: 'All fields are required' });
+        return res.status(400).json({ message: 'Name, email, and password are required' });
     }
 
     try {
@@ -19,11 +20,19 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ message: 'Email already registered' });
         }
 
-        // Create new user (password & pin will be hashed in schema)
-        const user = new User({ name, email, password, pin });
+        // If UPI ID provided, check uniqueness
+        if (upiId) {
+            const existingUpi = await User.findOne({ upiId });
+            if (existingUpi) {
+                return res.status(400).json({ message: 'UPI ID already registered' });
+            }
+        }
+
+        // Create new user (password & pin auto-hashed in schema)
+        const user = new User({ name, email, password, upiId, pin });
         await user.save();
 
-        // Generate JWT token
+        // Generate JWT
         const token = jwt.sign(
             { id: user._id, email: user.email, role: user.role },
             process.env.JWT_SECRET,

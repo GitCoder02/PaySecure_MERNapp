@@ -7,6 +7,8 @@ const RegisterForm = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [upiPin, setUpiPin] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
@@ -21,6 +23,8 @@ const RegisterForm = () => {
         name,
         email,
         password,
+        upiId,
+        pin: upiPin, // backend expects "pin"
       });
 
       setSuccess(res.data.message);
@@ -67,6 +71,26 @@ const RegisterForm = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <TextField
+            label="UPI ID"
+            type="text"
+            fullWidth
+            margin="normal"
+            value={upiId}
+            onChange={(e) => setUpiId(e.target.value)}
+            required
+          />
+          <TextField
+            label="UPI PIN"
+            type="password"
+            fullWidth
+            margin="normal"
+            value={upiPin}
+            onChange={(e) => setUpiPin(e.target.value)}
+            inputProps={{ maxLength: 4 }}
+            required
+          />
+
           <Button
             type="submit"
             variant="contained"
@@ -75,6 +99,17 @@ const RegisterForm = () => {
             sx={{ mt: 2 }}
           >
             Register
+          </Button>
+
+          {/* 👇 Go to Login Button */}
+          <Button
+            variant="outlined"
+            color="secondary"
+            fullWidth
+            sx={{ mt: 2 }}
+            onClick={() => navigate('/login')}
+          >
+            Go to Login
           </Button>
         </form>
       </Box>
