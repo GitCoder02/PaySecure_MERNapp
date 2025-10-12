@@ -27,21 +27,22 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
 
   const navigate = useNavigate();
 
-  /** 🔁 Fetch wallet, bank, and success rate data */
+  // 🔁 Fetch wallet and profile data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // ✅ Fetch wallet info
         const userRes = await axios.get("http://localhost:5000/api/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setWalletBalance(userRes.data.balance);
         setUser(userRes.data);
+        setTwoFAEnabled(userRes.data.twoFactorEnabled || false);
 
-        // ✅ Fetch linked bank accounts
+        // Fetch linked bank accounts
         try {
           const bankRes = await axios.get("http://localhost:5000/api/bank/my", {
             headers: { Authorization: `Bearer ${token}` },
@@ -51,7 +52,7 @@ const Dashboard = () => {
           setBankAccounts([]);
         }
 
-        // ✅ Fetch transaction success rate
+        // Fetch transaction success rate
         const txRes = await axios.get("http://localhost:5000/api/payment/history", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -72,12 +73,12 @@ const Dashboard = () => {
 
     if (token) {
       fetchData();
-      const interval = setInterval(fetchData, 10000); // auto-refresh every 10s
+      const interval = setInterval(fetchData, 10000);
       return () => clearInterval(interval);
     }
   }, [token, setUser]);
 
-  /** 🔄 Manual refresh handler */
+  // 🔄 Manual refresh handler
   const handleRefresh = async () => {
     setMessage({ type: "info", text: "Refreshing balances..." });
     try {
@@ -85,10 +86,6 @@ const Dashboard = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setWalletBalance(userRes.data.balance);
-      const bankRes = await axios.get("http://localhost:5000/api/bank/my", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setBankAccounts(bankRes.data.banks || []);
       setMessage({ type: "success", text: "Balances updated!" });
     } catch (err) {
       setMessage({ type: "error", text: "Failed to refresh balances" });
@@ -96,7 +93,7 @@ const Dashboard = () => {
     setTimeout(() => setMessage(null), 2000);
   };
 
-  /** ⏳ Loader while data loads */
+  // ⏳ Loader while data loads
   if (loading)
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
@@ -227,6 +224,26 @@ const Dashboard = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* 🔒 2FA Setup Section */}
+      <Box sx={{ mt: 5, textAlign: "center" }}>
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="h6">Account Security</Typography>
+        {twoFAEnabled ? (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            ✅ Two-Factor Authentication is already enabled on your account.
+          </Alert>
+        ) : (
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ mt: 2 }}
+            onClick={() => navigate("/2fa-setup")}
+          >
+            🔒 Enable Two-Factor Authentication
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 };

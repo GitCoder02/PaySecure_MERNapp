@@ -22,7 +22,7 @@ const PaymentForm = () => {
     expiryYear: "",
     cvv: "",
     saveCard: false,
-    // Bank specific
+    twoFactorCode: "", // ✅ added for TOTP
     bankUsername: "",
     bankPassword: "",
     otp: ""
@@ -31,12 +31,13 @@ const PaymentForm = () => {
   const [userCard, setUserCard] = useState(null);
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
-
   const [otpSent, setOtpSent] = useState(false);
-  const [otpDemoValue, setOtpDemoValue] = useState(null); // display OTP for demo if backend returns it
+  const [otpDemoValue, setOtpDemoValue] = useState(null);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false); // ✅ track 2FA status
 
   const navigate = useNavigate();
 
+  // 🔹 Fetch merchants
   useEffect(() => {
     const fetchMerchants = async () => {
       try {
@@ -44,29 +45,36 @@ const PaymentForm = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setMerchants(res.data.merchants);
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+      }
     };
     if (token) fetchMerchants();
   }, [token]);
 
-  // Prefill saved card info
+  // 🔹 Fetch user details (to check if 2FA is enabled)
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const res = await axios.get("http://localhost:5000/api/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const user = res.data.user;
-        if (user?.cardLast4) {
-          setUserCard(user);
-          setFormData(prev => ({
-            ...prev,
-            expiryMonth: user.cardExpiryMonth,
-            expiryYear: user.cardExpiryYear,
-            saveCard: true
-          }));
+        const user = res.data;
+        if (user) {
+          setTwoFactorEnabled(user.twoFactorEnabled); // ✅ save 2FA status
+          if (user.cardLast4) {
+            setUserCard(user);
+            setFormData(prev => ({
+              ...prev,
+              expiryMonth: user.cardExpiryMonth,
+              expiryYear: user.cardExpiryYear,
+              saveCard: true
+            }));
+          }
         }
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+      }
     };
     if (token) fetchUser();
   }, [token]);
@@ -76,7 +84,7 @@ const PaymentForm = () => {
     setFormData(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
-  // Start bank OTP (called when user clicks "Send OTP" during bank flow)
+  // 🔹 Bank OTP flow
   const initiateBankOtp = async () => {
     setMessage(null);
     if (!formData.bankUsername || !formData.bankPassword || !formData.receiverId || !formData.amount) {
@@ -91,7 +99,6 @@ const PaymentForm = () => {
         amount: formData.amount
       }, { headers: { Authorization: `Bearer ${token}` } });
       setOtpSent(true);
-      // backend returns otp for demo; show if present
       if (res.data.otp) setOtpDemoValue(res.data.otp);
       setMessage({ type: 'success', text: 'OTP sent (demo). Enter the OTP to confirm.' });
     } catch (err) {
@@ -99,7 +106,6 @@ const PaymentForm = () => {
     } finally { setLoading(false); }
   };
 
-  // Verify OTP and finalize
   const verifyBankOtp = async () => {
     setMessage(null);
     if (!formData.otp) return setMessage({ type: 'error', text: 'Enter OTP' });
@@ -115,31 +121,53 @@ const PaymentForm = () => {
     } finally { setLoading(false); }
   };
 
+  // 🔹 Main payment handler (UPI / Card)
   const handleNext = async () => {
     setMessage(null);
-    // If Bank flow and we're on final step, do OTP initiation/verification flow instead of single /pay
+
     if (activeStep < steps.length - 1) {
       setActiveStep(prev => prev + 1);
       return;
     }
 
-    // Final step for UPI/Card: call /api/payment/pay
-    if (formData.type === 'UPI' || formData.type === 'Card') {
-      setLoading(true);
-      try {
-        const res = await axios.post("http://localhost:5000/api/payment/pay", formData, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setMessage({ type: 'success', text: res.data.message });
-        setTimeout(() => navigate("/transactions"), 1500);
-      } catch (err) {
-        setMessage({ type: 'error', text: err.response?.data?.message || 'Payment failed' });
-      } finally { setLoading(false); }
-    } else if (formData.type === 'Bank') {
-      // For Bank, we expect the user to use the dedicated "Send OTP" button then "Verify OTP"
-      setMessage({ type: 'info', text: 'For Bank payments click "Send OTP" then enter OTP and click "Verify OTP".' });
-    } else {
-      setMessage({ type: 'error', text: 'Invalid payment type' });
+    // For Bank: show OTP flow instead
+    if (formData.type === "Bank") {
+      return setMessage({ type: "info", text: "Use Send OTP → Enter OTP → Verify OTP for bank payments." });
+    }
+
+    // ✅ If amount > 5000 and user has 2FA enabled → require TOTP
+    if (parseFloat(formData.amount) > 5000 && twoFactorEnabled && !formData.twoFactorCode) {
+      return setMessage({
+        type: "warning",
+        text: "Enter your 6-digit 2FA code from Google Authenticator to continue.",
+      });
+    }
+
+    // 🔹 Proceed with normal payment
+    setLoading(true);
+    try {
+      const res = await axios.post("http://localhost:5000/api/payment/pay", formData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage({ type: "success", text: res.data.message });
+      setTimeout(() => navigate("/transactions"), 1500);
+    } catch (err) {
+      // log full response to console for debugging
+      console.error("Payment request error:", err?.response ?? err);
+
+      const resp = err.response?.data;
+      let text = "Payment failed";
+
+      // prefer structured server messages and validation errors
+      if (resp) {
+        if (resp.message) text = resp.message;
+        else if (Array.isArray(resp.errors)) text = resp.errors.map(e => e.msg || JSON.stringify(e)).join("; ");
+        else text = typeof resp === "string" ? resp : JSON.stringify(resp);
+      }
+
+      setMessage({ type: "error", text });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -152,7 +180,9 @@ const PaymentForm = () => {
           <Typography variant="h5" gutterBottom>Make a Payment</Typography>
 
           <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
-            {steps.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
+            {steps.map(label => (
+              <Step key={label}><StepLabel>{label}</StepLabel></Step>
+            ))}
           </Stepper>
 
           {/* Step 1: Amount */}
@@ -161,7 +191,7 @@ const PaymentForm = () => {
               value={formData.amount} onChange={handleChange} fullWidth required sx={{ mb: 2 }} />
           )}
 
-          {/* Step 2: Payment Type & Merchant */}
+          {/* Step 2: Type & Merchant */}
           {activeStep === 1 && (
             <>
               <TextField label="Payment Type" name="type" select value={formData.type}
@@ -180,20 +210,22 @@ const PaymentForm = () => {
             </>
           )}
 
-          {/* Step 3: details */}
+          {/* Step 3: Details */}
           {activeStep === 2 && (
             <>
-              {(formData.type === 'UPI') && (
+              {/* 🔹 UPI fields */}
+              {formData.type === "UPI" && (
                 <TextField label="PIN" name="pin" type="password" value={formData.pin}
                   onChange={handleChange} fullWidth required inputProps={{ maxLength: 4 }} sx={{ mb: 2 }} />
               )}
 
-              {(formData.type === 'Card') && (
+              {/* 🔹 Card fields */}
+              {formData.type === "Card" && (
                 <>
                   <TextField label="Card Number" name="cardNumber" type="text"
                     value={formData.cardNumber} onChange={handleChange} fullWidth required sx={{ mb: 2 }}
-                    placeholder={userCard?.cardLast4 ? `**** **** **** ${userCard.cardLast4}` : ''} inputProps={{ maxLength: 16 }} />
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    placeholder={userCard?.cardLast4 ? `**** **** **** ${userCard.cardLast4}` : ""} inputProps={{ maxLength: 16 }} />
+                  <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
                     <TextField label="Expiry Month" name="expiryMonth" type="number"
                       value={formData.expiryMonth} onChange={handleChange} required sx={{ flex: 1 }} inputProps={{ min: 1, max: 12 }} />
                     <TextField label="Expiry Year" name="expiryYear" type="number"
@@ -207,7 +239,8 @@ const PaymentForm = () => {
                 </>
               )}
 
-              {(formData.type === 'Bank') && (
+              {/* 🔹 Bank fields */}
+              {formData.type === "Bank" && (
                 <>
                   {!otpSent ? (
                     <>
@@ -215,11 +248,11 @@ const PaymentForm = () => {
                         onChange={handleChange} fullWidth required sx={{ mb: 2 }} />
                       <TextField label="Bank Password" name="bankPassword" type="password" value={formData.bankPassword}
                         onChange={handleChange} fullWidth required sx={{ mb: 2 }} />
-                      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                      <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
                         <Button variant="contained" onClick={initiateBankOtp} disabled={loading}>
-                          {loading ? <CircularProgress size={20} /> : 'Send OTP'}
+                          {loading ? <CircularProgress size={20} /> : "Send OTP"}
                         </Button>
-                        <Button onClick={() => { setFormData(prev => ({ ...prev, bankUsername: '', bankPassword: '' })); }}>
+                        <Button onClick={() => setFormData(prev => ({ ...prev, bankUsername: "", bankPassword: "" }))}>
                           Clear
                         </Button>
                       </Box>
@@ -227,15 +260,15 @@ const PaymentForm = () => {
                   ) : (
                     <>
                       <Alert severity="info" sx={{ mb: 2 }}>
-                        OTP sent to your bank phone. (Demo OTP: {otpDemoValue ?? 'hidden'})
+                        OTP sent to your bank phone. (Demo OTP: {otpDemoValue ?? "hidden"})
                       </Alert>
                       <TextField label="Enter OTP" name="otp" value={formData.otp}
                         onChange={handleChange} fullWidth required sx={{ mb: 2 }} />
-                      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                      <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
                         <Button variant="contained" onClick={verifyBankOtp} disabled={loading}>
-                          {loading ? <CircularProgress size={20} /> : 'Verify OTP'}
+                          {loading ? <CircularProgress size={20} /> : "Verify OTP"}
                         </Button>
-                        <Button onClick={() => { setOtpSent(false); setOtpDemoValue(null); setFormData(prev => ({ ...prev, otp: '' })); }}>
+                        <Button onClick={() => { setOtpSent(false); setOtpDemoValue(null); setFormData(prev => ({ ...prev, otp: "" })); }}>
                           Cancel
                         </Button>
                       </Box>
@@ -243,13 +276,29 @@ const PaymentForm = () => {
                   )}
                 </>
               )}
+
+              {/* 🔹 2FA Input (only if > ₹5000) */}
+              {parseFloat(formData.amount) > 5000 && twoFactorEnabled && (
+                <TextField
+                  label="2FA Code (Google Authenticator)"
+                  name="twoFactorCode"
+                  value={formData.twoFactorCode}
+                  onChange={handleChange}
+                  fullWidth
+                  required
+                  inputProps={{ maxLength: 6 }}
+                  sx={{ mb: 2 }}
+                />
+              )}
             </>
           )}
 
+          {/* Navigation Buttons */}
           <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between" }}>
             <Button disabled={activeStep === 0} onClick={handleBack}>Back</Button>
             <Button variant="contained" onClick={handleNext} disabled={loading}>
-              {loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : (activeStep === steps.length - 1 ? "Pay / Continue" : "Next")}
+              {loading ? <CircularProgress size={24} sx={{ color: "white" }} /> :
+                (activeStep === steps.length - 1 ? "Pay / Continue" : "Next")}
             </Button>
           </Box>
 

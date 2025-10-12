@@ -2,78 +2,99 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
 // Define user schema
-const userSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema(
+  {
     name: {
-        type: String,
-        required: true,
-        trim: true
+      type: String,
+      required: true,
+      trim: true,
     },
+
     email: {
-        type: String,
-        required: true,
-        unique: true,
-        lowercase: true,
-        trim: true
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
     },
+
     password: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
-    upiId: { 
-        type: String,
-        unique: true,
-        sparse: true,   // allows users without UPI ID (merchants/admins)
-        trim: true
+
+    upiId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows users without UPI ID
+      trim: true,
     },
+
     pin: {
-        type: String, // Will be hashed like password
+      type: String, // will be hashed like password
     },
+
     balance: {
-        type: Number,
-        default: 5000 // starting wallet balance for demo
+      type: Number,
+      default: 5000, // starting wallet balance
     },
+
     role: {
-        type: String,
-        enum: ['user', 'merchant', 'admin'],
-        default: 'user'
+      type: String,
+      enum: ['user', 'merchant', 'admin'],
+      default: 'user',
     },
-    // ✅ Card fields for saved cards
+
+    // ✅ Card fields (for saved cards)
     cardLast4: { type: String, maxlength: 4 },
     cardExpiryMonth: { type: Number, min: 1, max: 12 },
-    cardExpiryYear: { type: Number }
-}, { timestamps: true });
+    cardExpiryYear: { type: Number },
+
+    // ✅ Phase 3 additions (2FA)
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFactorSecret: {
+      type: String, // can be encrypted in future for extra safety
+    },
+  },
+  { timestamps: true }
+);
 
 /**
- * Hash password and PIN before saving
+ * 🔒 Hash password and PIN before saving
  */
-userSchema.pre('save', async function(next) {
-    try {
-        if (this.isModified('password')) {
-            const salt = await bcrypt.genSalt(10);
-            this.password = await bcrypt.hash(this.password, salt);
-        }
-
-        if (this.isModified('pin') && this.pin) {
-            const salt = await bcrypt.genSalt(10);
-            this.pin = await bcrypt.hash(this.pin, salt);
-        }
-
-        next();
-    } catch (err) {
-        next(err);
+userSchema.pre('save', async function (next) {
+  try {
+    // Hash password if modified
+    if (this.isModified('password')) {
+      const salt = await bcrypt.genSalt(10);
+      this.password = await bcrypt.hash(this.password, salt);
     }
+
+    // Hash PIN if modified
+    if (this.isModified('pin') && this.pin) {
+      const salt = await bcrypt.genSalt(10);
+      this.pin = await bcrypt.hash(this.pin, salt);
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
- * Compare functions
+ * 🔐 Compare functions
  */
-userSchema.methods.comparePassword = async function(candidatePassword) {
-    return await bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
-userSchema.methods.comparePin = async function(candidatePin) {
-    if (!this.pin) return false;
-    return await bcrypt.compare(candidatePin, this.pin);
+userSchema.methods.comparePin = async function (candidatePin) {
+  if (!this.pin) return false;
+  return await bcrypt.compare(candidatePin, this.pin);
 };
 
 module.exports = mongoose.model('User', userSchema);

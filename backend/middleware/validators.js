@@ -50,30 +50,47 @@ exports.validatePayment = [
   body("receiverId")
     .isMongoId()
     .withMessage("Invalid receiver ID format"),
+
+  // UPI: require 4-digit PIN when type === "UPI"
   body("pin")
-    .optional()
-    .trim()
-    .escape(),
+    .if((value, { req }) => req.body.type === "UPI")
+    .notEmpty().withMessage("PIN is required for UPI")
+    .isLength({ min: 4, max: 4 }).withMessage("PIN must be 4 digits")
+    .matches(/^\d{4}$/).withMessage("PIN must be numeric"),
+
+  // Card: validate only when type === "Card"
   body("cardNumber")
-    .optional()
+    .if((value, { req }) => req.body.type === "Card")
+    .notEmpty().withMessage("Card number is required")
     .trim()
     .isLength({ min: 16, max: 16 })
     .withMessage("Card number must be 16 digits")
-    .escape(),
+    .isNumeric().withMessage("Card number must contain only digits"),
   body("cvv")
-    .optional()
+    .if((value, { req }) => req.body.type === "Card")
+    .notEmpty().withMessage("CVV is required")
     .trim()
     .isLength({ min: 3, max: 3 })
     .withMessage("CVV must be 3 digits")
-    .escape(),
+    .isNumeric().withMessage("CVV must contain only digits"),
   body("expiryMonth")
-    .optional()
+    .if((value, { req }) => req.body.type === "Card")
+    .notEmpty().withMessage("Expiry month is required")
     .isInt({ min: 1, max: 12 })
     .withMessage("Invalid expiry month"),
   body("expiryYear")
-    .optional()
+    .if((value, { req }) => req.body.type === "Card")
+    .notEmpty().withMessage("Expiry year is required")
     .isInt({ min: new Date().getFullYear() })
     .withMessage("Invalid expiry year"),
+
+  // Bank: require bank credentials only when type === "Bank"
+  body("bankUsername")
+    .if((value, { req }) => req.body.type === "Bank")
+    .notEmpty().withMessage("Bank username is required"),
+  body("bankPassword")
+    .if((value, { req }) => req.body.type === "Bank")
+    .notEmpty().withMessage("Bank password is required"),
 ];
 
 // 🏦 Bank Transfer (Initiate OTP)

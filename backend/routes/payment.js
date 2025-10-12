@@ -8,14 +8,21 @@ const Transaction = require("../models/Transaction");
 const BankAccount = require("../models/BankAccount");
 const User = require("../models/User");
 const crypto = require("crypto");
+const { authenticator } = require("otplib"); // ✅ Added for TOTP verification
 
 // ✅ AES Encryption (for PIN)
 function encrypt(pin) {
   const algorithm = "aes-256-gcm";
-  let key = Buffer.from(process.env.AES_SECRET_KEY, "utf8");
-  if (key.length !== 32) throw new Error("AES_SECRET_KEY must be exactly 32 bytes long");
+  const secret = process.env.AES_SECRET_KEY;
+  if (!secret) {
+    throw new Error("Missing AES_SECRET_KEY env var. Set AES_SECRET_KEY in backend/.env");
+  }
 
-  const iv = crypto.randomBytes(16);
+  // Derive a 32-byte key from the configured secret (so any length secret works)
+  const key = crypto.createHash("sha256").update(secret, "utf8").digest(); // 32 bytes
+
+  // Recommended IV length for GCM is 12 bytes
+  const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(algorithm, key, iv);
   let encrypted = cipher.update(pin, "utf8", "hex");
   encrypted += cipher.final("hex");
@@ -25,7 +32,8 @@ function encrypt(pin) {
 
 // ✅ Luhn algorithm for card validation
 function isValidCardNumber(cardNumber) {
-  let sum = 0, shouldDouble = false;
+  let sum = 0,
+    shouldDouble = false;
   for (let i = cardNumber.length - 1; i >= 0; i--) {
     let digit = parseInt(cardNumber[i]);
     if (shouldDouble) {
@@ -38,6 +46,9 @@ function isValidCardNumber(cardNumber) {
   return sum % 10 === 0;
 }
 
+/* ===========================================================
+💳 PAY ROUTE — WITH 2FA CHECK FOR HIGH-VALUE PAYMENTS
+=========================================================== */
 // 💳 /api/payment/pay
 router.post("/pay", authMiddleware, validatePayment, async (req, res) => {
   const errors = validationResult(req);
@@ -53,12 +64,30 @@ router.post("/pay", authMiddleware, validatePayment, async (req, res) => {
     expiryYear,
     cvv,
     saveCard,
+    twoFactorCode, // ✅ added
   } = req.body;
 
   try {
     const sender = await User.findById(req.user.id);
     const receiver = await User.findById(receiverId);
     if (!receiver) return res.status(400).json({ message: "Invalid merchant" });
+
+    // ✅ Step 1: Check 2FA if required
+    if (parseFloat(amount) > 5000 && sender.twoFactorEnabled) {
+      if (!twoFactorCode) {
+        return res.status(400).json({ message: "2FA code required for high-value payments" });
+      }
+
+      const { authenticator } = require("otplib");
+      const isValid = authenticator.verify({
+        token: twoFactorCode,
+        secret: sender.twoFactorSecret,
+      });
+
+      if (!isValid) {
+        return res.status(400).json({ message: "Invalid 2FA code" });
+      }
+    }
 
     let encryptedPin = "";
     let transactionStatus = "Pending";
