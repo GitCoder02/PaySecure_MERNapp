@@ -10,6 +10,7 @@ import { AuthProvider, AuthContext } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout/Layout";
 import BankAccountPage from "./pages/BankAccountPage";
+import TwoFactorSetup from "./components/Auth/TwoFactorSetup";
 
 function AppRoutes() {
   const { user } = useContext(AuthContext);
@@ -41,8 +42,17 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-
+      {/* ✅ 2FA Setup route */}
+      <Route
+        path="/2fa-setup"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <TwoFactorSetup />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
       {/* ✅ User-only routes */}
       <Route
         path="/payment"
