@@ -21,7 +21,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginForm />} />
       <Route path="/register" element={<RegisterForm />} />
 
-      {/* ✅ Role-based dashboard */}
+      {/*  Role-based dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -42,7 +42,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      {/* ✅ 2FA Setup route */}
+      {/*  2FA Setup route */}
       <Route
         path="/2fa-setup"
         element={
@@ -53,7 +53,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      {/* ✅ User-only routes */}
+      {/*  User-only routes */}
       <Route
         path="/payment"
         element={

@@ -23,7 +23,7 @@ const LoginForm = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🔹 Step 1: Login with email/password
+  //  Login with email/password
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -51,7 +51,7 @@ const LoginForm = () => {
     }
   };
 
-  // 🔹 Step 2: Verify 2FA code
+  //  Verify 2FA code
   const handle2FAVerify = async (e) => {
     e.preventDefault();
     setError("");

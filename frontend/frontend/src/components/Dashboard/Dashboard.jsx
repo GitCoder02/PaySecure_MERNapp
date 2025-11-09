@@ -31,7 +31,7 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
 
-  // 🔁 Fetch wallet and profile data
+  //  Fetch wallet and profile data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -78,7 +78,7 @@ const Dashboard = () => {
     }
   }, [token, setUser]);
 
-  // 🔄 Manual refresh handler
+  //  Manual refresh handler
   const handleRefresh = async () => {
     setMessage({ type: "info", text: "Refreshing balances..." });
     try {
@@ -93,7 +93,7 @@ const Dashboard = () => {
     setTimeout(() => setMessage(null), 2000);
   };
 
-  // ⏳ Loader while data loads
+  //  Loader while data loads
   if (loading)
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
@@ -225,7 +225,7 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* 🔒 2FA Setup Section */}
+      {/*  2FA Setup Section */}
       <Box sx={{ mt: 5, textAlign: "center" }}>
         <Divider sx={{ my: 2 }} />
         <Typography variant="h6">Account Security</Typography>

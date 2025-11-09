@@ -45,25 +45,23 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
 
-    // ✅ Card fields (for saved cards)
     cardLast4: { type: String, maxlength: 4 },
     cardExpiryMonth: { type: Number, min: 1, max: 12 },
     cardExpiryYear: { type: Number },
 
-    // ✅ Phase 3 additions (2FA)
     twoFactorEnabled: {
       type: Boolean,
       default: false,
     },
     twoFactorSecret: {
-      type: String, // can be encrypted in future for extra safety
+      type: String, 
     },
   },
   { timestamps: true }
 );
 
 /**
- * 🔒 Hash password and PIN before saving
+ Hash password and PIN before saving
  */
 userSchema.pre('save', async function (next) {
   try {
@@ -86,7 +84,7 @@ userSchema.pre('save', async function (next) {
 });
 
 /**
- * 🔐 Compare functions
+ *  Compare functions
  */
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);

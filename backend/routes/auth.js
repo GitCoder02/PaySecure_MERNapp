@@ -9,7 +9,7 @@ const { authenticator } = require("otplib");
 const qrcode = require("qrcode");
 
 /* -----------------------------------------------
- 🧾 REGISTER NEW USER
+  REGISTER NEW USER
 -------------------------------------------------*/
 router.post("/register", validateRegister, async (req, res) => {
   const errors = validationResult(req);
@@ -49,7 +49,7 @@ router.post("/register", validateRegister, async (req, res) => {
 });
 
 /* -----------------------------------------------
- 🔐 STEP 1: LOGIN (EMAIL + PASSWORD)
+ LOGIN (EMAIL + PASSWORD)
 -------------------------------------------------*/
 router.post("/login", validateLogin, async (req, res) => {
   const errors = validationResult(req);
@@ -76,7 +76,7 @@ router.post("/login", validateLogin, async (req, res) => {
       });
     }
 
-    // ✅ If 2FA disabled → login as usual
+    //  If 2FA disabled → login as usual
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
@@ -91,7 +91,7 @@ router.post("/login", validateLogin, async (req, res) => {
 });
 
 /* -----------------------------------------------
- 🔑 STEP 2: VERIFY 2FA CODE (AFTER PASSWORD LOGIN)
+ STEP 2: VERIFY 2FA CODE (AFTER PASSWORD LOGIN)
 -------------------------------------------------*/
 router.post("/2fa/login-verify", async (req, res) => {
   try {
@@ -112,7 +112,7 @@ router.post("/2fa/login-verify", async (req, res) => {
 
     if (!isValid) return res.status(400).json({ message: "Invalid 2FA code" });
 
-    // ✅ Generate token now that both steps passed
+    //  Generate token now that both steps passed
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
@@ -127,7 +127,7 @@ router.post("/2fa/login-verify", async (req, res) => {
 });
 
 /* -----------------------------------------------
- 🔒 SET OR UPDATE UPI PIN
+  SET OR UPDATE UPI PIN
 -------------------------------------------------*/
 router.post("/set-pin", authMiddleware, async (req, res) => {
   const { pin } = req.body;
@@ -147,7 +147,7 @@ router.post("/set-pin", authMiddleware, async (req, res) => {
 });
 
 /* -----------------------------------------------
- 👤 GET LOGGED-IN USER PROFILE
+  GET LOGGED-IN USER PROFILE
 -------------------------------------------------*/
 router.get("/me", authMiddleware, async (req, res) => {
   try {
@@ -160,7 +160,7 @@ router.get("/me", authMiddleware, async (req, res) => {
 });
 
 /* -----------------------------------------------
- 🧑‍💼 GET ALL MERCHANTS
+  GET ALL MERCHANTS
 -------------------------------------------------*/
 router.get("/merchants", async (req, res) => {
   try {
@@ -175,7 +175,7 @@ router.get("/merchants", async (req, res) => {
 });
 
 /* -----------------------------------------------
- 🧩 2FA SETUP (Generate Secret + QR)
+  2FA SETUP (Generate Secret + QR)
 -------------------------------------------------*/
 router.post("/2fa/setup", authMiddleware, async (req, res) => {
   try {
@@ -201,7 +201,7 @@ router.post("/2fa/setup", authMiddleware, async (req, res) => {
 });
 
 /* -----------------------------------------------
- ✅ 2FA VERIFY (Enable 2FA for Account)
+  2FA VERIFY (Enable 2FA for Account)
 -------------------------------------------------*/
 router.post("/2fa/verify", authMiddleware, async (req, res) => {
   try {
@@ -229,7 +229,7 @@ router.post("/2fa/verify", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ STEP 2: VERIFY 2FA CODE AND COMPLETE LOGIN
+//  STEP 2: VERIFY 2FA CODE AND COMPLETE LOGIN
 router.post("/2fa/verify-login", async (req, res) => {
   try {
     const { email, twoFactorCode } = req.body;
@@ -239,7 +239,7 @@ router.post("/2fa/verify-login", async (req, res) => {
         .status(400)
         .json({ message: "Email and 2FA code are required." });
 
-    // 1️⃣ Find the user
+    // 1️ Find the user
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "User not found." });
 
@@ -248,7 +248,7 @@ router.post("/2fa/verify-login", async (req, res) => {
         .status(400)
         .json({ message: "2FA is not enabled for this account." });
 
-    // 2️⃣ Verify the 6-digit TOTP code
+    // 2️ Verify the 6-digit TOTP code
     const isValid = authenticator.verify({
       token: twoFactorCode,
       secret: user.twoFactorSecret,
@@ -257,7 +257,7 @@ router.post("/2fa/verify-login", async (req, res) => {
     if (!isValid)
       return res.status(400).json({ message: "Invalid 2FA code." });
 
-    // 3️⃣ Generate JWT after successful 2FA
+    // 3️ Generate JWT after successful 2FA
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
