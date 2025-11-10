@@ -24,3 +24,8 @@ backend/.env
 # OS generated files
 .DS_Store
 Thumbs.db
+
+// Add these lines
+keys/*.pem
+keys/private.pem
+keys/public.pem
