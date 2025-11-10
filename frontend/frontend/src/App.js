@@ -1,3 +1,4 @@
+// App.js (updated)
 import React, { useContext } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import LoginForm from "./components/Auth/LoginForm";
@@ -11,6 +12,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout/Layout";
 import BankAccountPage from "./pages/BankAccountPage";
 import TwoFactorSetup from "./components/Auth/TwoFactorSetup";
+
+// New admin imports
+import AdminDashboard from "./components/Admin/AdminDashboard";
 
 function AppRoutes() {
   const { user } = useContext(AuthContext);
@@ -26,9 +30,7 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Layout>
-              {user?.role === "merchant" ? <MerchantDashboard /> : <Dashboard />}
-            </Layout>
+            <Layout>{user?.role === "merchant" ? <MerchantDashboard /> : <Dashboard />}</Layout>
           </ProtectedRoute>
         }
       />
@@ -58,9 +60,7 @@ function AppRoutes() {
         path="/payment"
         element={
           <ProtectedRoute>
-            <Layout>
-              {user?.role === "user" ? <PaymentForm /> : <Navigate to="/dashboard" />}
-            </Layout>
+            <Layout>{user?.role === "user" ? <PaymentForm /> : <Navigate to="/dashboard" />}</Layout>
           </ProtectedRoute>
         }
       />
@@ -68,16 +68,38 @@ function AppRoutes() {
         path="/transactions"
         element={
           <ProtectedRoute>
+            <Layout>{user?.role === "user" ? <TransactionList /> : <Navigate to="/dashboard" />}</Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin Console route */}
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute>
             <Layout>
-              {user?.role === "user" ? <TransactionList /> : <Navigate to="/dashboard" />}
+              <AdminDashboard />
             </Layout>
           </ProtectedRoute>
         }
       />
-    
+
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminDashboard initialTab={2} />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+
+
       {/* Redirect unknown paths */}
       <Route path="*" element={<Navigate to="/login" />} />
-      
     </Routes>
   );
 }

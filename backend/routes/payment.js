@@ -1,4 +1,3 @@
-// backend/routes/payment.js
 const express = require("express");
 const router = express.Router();
 const { validationResult } = require("express-validator");
@@ -11,8 +10,14 @@ const User = require("../models/User");
 const crypto = require("crypto");
 const { authenticator } = require("otplib");
 const mongoose = require("mongoose");
+const Audit = require("../models/Audit");
+const { paymentLimiter, otpLimiter } = require("../middleware/rateLimiter");
+const { computeRiskForTransaction } = require("../utils/risk");
 
-//  AES Encryption (for PIN)
+// 🆕 Import RSA helpers
+const { signTransaction, verifySignature, getPublicKey } = require("../utils/signatures");
+
+// AES Encryption (for PIN)
 function encrypt(pin) {
   const algorithm = "aes-256-gcm";
   const secret = process.env.AES_SECRET_KEY;
@@ -29,8 +34,7 @@ function encrypt(pin) {
 
 // Luhn algorithm for Card validation
 function isValidCardNumber(cardNumber) {
-  let sum = 0,
-    shouldDouble = false;
+  let sum = 0, shouldDouble = false;
   for (let i = cardNumber.length - 1; i >= 0; i--) {
     let digit = parseInt(cardNumber[i], 10);
     if (shouldDouble) {
@@ -43,7 +47,7 @@ function isValidCardNumber(cardNumber) {
   return sum % 10 === 0;
 }
 
-// ----------------- OTP model (temporary store in Mongo) -----------------
+// OTP Schema
 const otpSchema = new mongoose.Schema({
   userId: String,
   otp: String,
@@ -55,7 +59,10 @@ const otpSchema = new mongoose.Schema({
 const OtpRecord = mongoose.models.OtpRecord || mongoose.model("OtpRecord", otpSchema);
 
 
-router.post("/bank/initiate", authMiddleware, validateBankInitiate, async (req, res) => {
+/* ===========================================================
+ INITIATE BANK OTP
+=========================================================== */
+router.post("/bank/initiate", authMiddleware, otpLimiter, validateBankInitiate, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -70,9 +77,9 @@ router.post("/bank/initiate", authMiddleware, validateBankInitiate, async (req, 
     const isPassOk = await bank.comparePassword(bankPassword);
     if (!isPassOk) return res.status(400).json({ message: "Invalid bank credentials" });
 
-    // create OTP
+    // Create OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
 
     await OtpRecord.findOneAndUpdate(
       { userId: sender._id.toString() },
@@ -81,11 +88,7 @@ router.post("/bank/initiate", authMiddleware, validateBankInitiate, async (req, 
     );
 
     console.log(`📩 OTP for ${sender.email} (userId=${sender._id}): ${otp}`);
-
-    return res.status(200).json({
-      message: "OTP sent (demo only, check server logs). Please verify to complete payment.",
-      otp, 
-    });
+    return res.status(200).json({ message: "OTP sent. (check logs)", otp });
   } catch (err) {
     console.error("Bank Initiate Error:", err);
     res.status(500).json({ message: "Failed to initiate bank OTP" });
@@ -93,7 +96,7 @@ router.post("/bank/initiate", authMiddleware, validateBankInitiate, async (req, 
 });
 
 /* ===========================================================
- VERIFY BANK OTP — With optional 2FA for high-value bank payments
+ VERIFY BANK OTP — With 2FA + Digital Signature + Audit
 =========================================================== */
 router.post("/bank/verify-otp", authMiddleware, async (req, res) => {
   try {
@@ -102,8 +105,6 @@ router.post("/bank/verify-otp", authMiddleware, async (req, res) => {
 
     const record = await OtpRecord.findOne({ userId: req.user.id.toString() });
     if (!record) return res.status(400).json({ message: "No pending OTP found. Please initiate first." });
-
-    // expiresAt is a Date object — compare correctly
     if (Date.now() > record.expiresAt.getTime()) {
       await OtpRecord.deleteOne({ userId: req.user.id.toString() });
       return res.status(400).json({ message: "OTP expired. Please initiate again." });
@@ -119,49 +120,82 @@ router.post("/bank/verify-otp", authMiddleware, async (req, res) => {
     if (!sender || !receiver || !bank)
       return res.status(400).json({ message: "Transaction participants not found" });
 
-    // 2FA check for high-value bank payments (>5000)
+    // 2FA for high-value
     if (Number(record.amount) > 5000 && sender.twoFactorEnabled) {
-      if (!twoFactorCode) return res.status(400).json({ message: "2FA code required for high-value bank payment" });
-
+      if (!twoFactorCode) return res.status(400).json({ message: "2FA code required" });
       const isValid2FA = authenticator.verify({
         token: twoFactorCode,
         secret: sender.twoFactorSecret,
       });
-
-      if (!isValid2FA) return res.status(400).json({ message: "Invalid 2FA code. Please check your Authenticator app." });
+      if (!isValid2FA) return res.status(400).json({ message: "Invalid 2FA code" });
     }
 
     const amount = Number(record.amount);
     if (bank.balance < amount) return res.status(400).json({ message: "Insufficient bank balance" });
 
-    // Transfer
     bank.balance -= amount;
     receiver.balance += amount;
     await bank.save();
     await receiver.save();
 
-    // Record transaction
-    const encryptedPin = "N/A";
-    const data = `${req.user.id}:${record.receiverId}:${amount}:Bank:${encryptedPin}`;
+    // 🔏 Create digital signature for bank transaction
+    const createdAt = new Date();
+    const canonical = `${req.user.id}:${record.receiverId}:${amount}:${createdAt.getTime()}`;
+    const signature = signTransaction(canonical);
+
+    // 🔍 Compute risk
+    let riskScore = 0;
+    let riskReasons = [];
+    try {
+      const riskResult = await computeRiskForTransaction({
+        userId: req.user.id,
+        receiverId: record.receiverId,
+        amount,
+        type: "Bank",
+        createdAt,
+      });
+      if (riskResult) {
+        riskScore = riskResult.score || 0;
+        riskReasons = riskResult.reasons || [];
+      }
+    } catch (e) {
+      console.error("Risk evaluation failed:", e);
+    }
+
+    // HMAC for record
+    const data = `${req.user.id}:${record.receiverId}:${amount}:Bank:N/A`;
     const hmac = crypto.createHmac("sha256", process.env.HMAC_SECRET || "defaultsecret")
       .update(data)
       .digest("hex");
 
+    // Create Transaction
     const transaction = new Transaction({
       userId: req.user.id,
       receiverId: record.receiverId,
       amount,
       type: "Bank",
-      pin: encryptedPin,
+      pin: "N/A",
       hmac,
+      signature,
       status: "Success",
+      createdAt,
+      riskScore,
+      riskReasons,
+      riskEvaluatedAt: new Date(),
+    });
+    await transaction.save();
+
+    // 🧾 Audit Log Entry
+    await Audit.create({
+      userId: req.user.id,
+      action: "TRANSACTION_SUCCESS",
+      meta: { receiverId: record.receiverId, amount, type: "Bank", transactionId: transaction._id, riskScore },
     });
 
-    await transaction.save();
     await OtpRecord.deleteOne({ userId: req.user.id.toString() });
 
     return res.status(201).json({
-      message: "✅ Bank payment successful with verified 2FA & OTP",
+      message: "✅ Bank payment successful (signed, audited, and verified)",
       transactionId: transaction._id,
       status: "Success",
     });
@@ -174,7 +208,7 @@ router.post("/bank/verify-otp", authMiddleware, async (req, res) => {
 /* ===========================================================
   /pay route 
 =========================================================== */
-router.post("/pay", authMiddleware, validatePayment, async (req, res) => {
+router.post("/pay", authMiddleware, paymentLimiter, validatePayment, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -271,6 +305,34 @@ router.post("/pay", authMiddleware, validatePayment, async (req, res) => {
       .update(data)
       .digest("hex");
 
+    // ----------------- RSA Digital Signature -----------------
+    // Use the same timestamp that will become createdAt
+    // Evaluate risk for this transaction (auto-calculate & store)
+    const createdAt = new Date();
+    const canonical = `${req.user.id}:${receiverId}:${amount}:${createdAt.getTime()}`;
+    const signature = signTransaction(canonical);
+
+    // compute risk using utils
+    const { computeRiskForTransaction } = require("../utils/risk");
+    let riskScore = 0;
+    let riskReasons = [];
+    try {
+      const riskResult = await computeRiskForTransaction({
+        userId: req.user.id,
+        receiverId,
+        amount,
+        type,
+        createdAt,
+      });
+      if (riskResult) {
+        riskScore = riskResult.score || 0;
+        riskReasons = riskResult.reasons || [];
+      }
+    } catch (e) {
+      console.error("Risk evaluation failed:", e);
+    }
+
+    // Save transaction with digital signature and stored risk
     const transaction = new Transaction({
       userId: req.user.id,
       receiverId,
@@ -278,12 +340,25 @@ router.post("/pay", authMiddleware, validatePayment, async (req, res) => {
       type,
       pin: encryptedPin,
       hmac,
+      signature,
       status: transactionStatus,
+      createdAt, // ensures canonical and createdAt are in sync
+      riskScore,
+      riskReasons,
+      riskEvaluatedAt: new Date(),
     });
+
+
+
 
     await sender.save();
     await receiver.save();
     await transaction.save();
+    await Audit.create({
+      userId: req.user.id,
+      action: "TRANSACTION_SUCCESS",
+      meta: { receiverId, amount, type, transactionId: transaction._id, riskScore },
+    });
 
     return res.status(201).json({
       message: "Payment successful",
@@ -339,5 +414,40 @@ router.get("/all", adminMiddleware, async (req, res) => {
     res.status(500).json({ message: "Failed to fetch all transactions" });
   }
 });
+
+/* ===========================================================
+  Verify Digital Signature for a Transaction
+=========================================================== */
+router.get("/verify-signature/:id", async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id);
+    if (!transaction)
+      return res.status(404).json({ message: "Transaction not found" });
+
+    const canonical = `${transaction.userId}:${transaction.receiverId}:${transaction.amount}:${transaction.createdAt.getTime()}`;
+    const isValid = verifySignature(canonical, transaction.signature);
+
+    // 🆕 Audit Log Entry
+    await Audit.create({
+      userId: transaction.userId,
+      action: "SIGNATURE_VERIFIED",
+      meta: { transactionId: transaction._id, isValid },
+    });
+
+    res.status(200).json({
+      transactionId: transaction._id,
+      isValid,
+      publicKey: getPublicKey(), // optional for frontend demo
+      message: isValid
+        ? "✅ Signature is valid. Transaction integrity verified."
+        : "❌ Invalid signature. Data may be tampered.",
+    });
+  } catch (err) {
+    console.error("Signature Verify Error:", err);
+    res.status(500).json({ message: "Failed to verify signature" });
+  }
+});
+
+
 
 module.exports = router;

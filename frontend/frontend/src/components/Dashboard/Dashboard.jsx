@@ -112,7 +112,12 @@ const Dashboard = () => {
           mb: 3,
         }}
       >
-        <Typography variant="h4">Welcome, {user?.name || "User"} 👋</Typography>
+        <Typography variant="h4">
+        {user?.role === "admin"
+            ? "Admin Dashboard"
+            : `Welcome, ${user?.name || "User"} 👋`}
+        </Typography>
+
         <Button variant="outlined" color="error" onClick={logout}>
           Logout
         </Button>
@@ -125,6 +130,7 @@ const Dashboard = () => {
         </Alert>
       )}
 
+      {user?.role !== "admin" && (
       <Grid container spacing={3}>
         {/* Wallet Balance */}
         <Grid item xs={12} md={4}>
@@ -224,6 +230,7 @@ const Dashboard = () => {
           </Card>
         </Grid>
       </Grid>
+      )}
 
       {/*  2FA Setup Section */}
       <Box sx={{ mt: 5, textAlign: "center" }}>

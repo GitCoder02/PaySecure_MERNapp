@@ -7,11 +7,14 @@ const authMiddleware = require("../middleware/auth");
 const { validateRegister, validateLogin } = require("../middleware/validators");
 const { authenticator } = require("otplib");
 const qrcode = require("qrcode");
+const Audit = require("../models/Audit");
+const { loginLimiter, registerLimiter, twoFaLimiter } = require('../middleware/rateLimiter');
+
 
 /* -----------------------------------------------
   REGISTER NEW USER
 -------------------------------------------------*/
-router.post("/register", validateRegister, async (req, res) => {
+router.post("/register", registerLimiter, validateRegister, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty())
     return res.status(400).json({ errors: errors.array() });
@@ -51,7 +54,7 @@ router.post("/register", validateRegister, async (req, res) => {
 /* -----------------------------------------------
  LOGIN (EMAIL + PASSWORD)
 -------------------------------------------------*/
-router.post("/login", validateLogin, async (req, res) => {
+router.post("/login", loginLimiter, validateLogin, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty())
     return res.status(400).json({ errors: errors.array() });
@@ -84,6 +87,12 @@ router.post("/login", validateLogin, async (req, res) => {
     );
 
     res.status(200).json({ message: "Login successful", token });
+    await Audit.create({
+      userId: user._id,
+      action: "USER_LOGIN_SUCCESS",
+      meta: { email: user.email },
+    });
+
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ message: "Server error during login" });
@@ -93,7 +102,7 @@ router.post("/login", validateLogin, async (req, res) => {
 /* -----------------------------------------------
  STEP 2: VERIFY 2FA CODE (AFTER PASSWORD LOGIN)
 -------------------------------------------------*/
-router.post("/2fa/login-verify", async (req, res) => {
+router.post("/2fa/login-verify", twoFaLimiter, async (req, res) => {
   try {
     const { userId, code } = req.body;
     if (!userId || !code)
