@@ -1,3 +1,4 @@
+// Sidebar.jsx (final version without separate Manage Users link)
 import React, { useContext } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
@@ -57,6 +58,7 @@ const Sidebar = () => {
         </div>
 
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {/* Common for all */}
           <li>
             <NavLink
               to="/dashboard"
@@ -69,6 +71,7 @@ const Sidebar = () => {
             </NavLink>
           </li>
 
+          {/* User routes */}
           {user?.role === "user" && (
             <>
               <li>
@@ -109,6 +112,7 @@ const Sidebar = () => {
             </>
           )}
 
+          {/* Merchant routes */}
           {user?.role === "merchant" && (
             <li>
               <NavLink
@@ -123,31 +127,19 @@ const Sidebar = () => {
             </li>
           )}
 
+          {/* Admin routes */}
           {user?.role === "admin" && (
-            <>
-              <li>
-                <NavLink
-                  to="/admin/transactions"
-                  style={({ isActive }) => ({
-                    ...linkStyle,
-                    ...(isActive ? activeStyle : {}),
-                  })}
-                >
-                  📊 All Transactions
-                </NavLink>
-              </li>
-              <li>
-                <NavLink
-                  to="/admin/users"
-                  style={({ isActive }) => ({
-                    ...linkStyle,
-                    ...(isActive ? activeStyle : {}),
-                  })}
-                >
-                  👥 Manage Users
-                </NavLink>
-              </li>
-            </>
+            <li>
+              <NavLink
+                to="/admin/dashboard"
+                style={({ isActive }) => ({
+                  ...linkStyle,
+                  ...(isActive ? activeStyle : {}),
+                })}
+              >
+                🛡️ Admin Console
+              </NavLink>
+            </li>
           )}
         </ul>
       </div>

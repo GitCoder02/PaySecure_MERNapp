@@ -19,7 +19,7 @@ const TwoFactorSetup = () => {
   const [loading, setLoading] = useState(false);
   const [isEnabled, setIsEnabled] = useState(false);
 
-  // 🔹 Step 1: Generate QR + secret
+  //  Generate QR + secret
   const handleSetup = async () => {
     setLoading(true);
     setMessage(null);
@@ -45,7 +45,7 @@ const TwoFactorSetup = () => {
     }
   };
 
-  // 🔹 Step 2: Verify code entered from app
+  //  Verify code entered from app
   const handleVerify = async () => {
     if (!code) {
       setMessage({ type: "error", text: "Please enter the code first." });

@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const BankAccount = require('../models/BankAccount');
 const authMiddleware = require('../middleware/auth');
+const { bankAddLimiter } = require('../middleware/rateLimiter');  
 
 // Add a bank account (user adds their bank credentials for demo)
-router.post('/add', authMiddleware, async (req, res) => {
+router.post('/add', authMiddleware, bankAddLimiter, async (req, res) => {
   try {
     const { bankUsername, bankPassword, accountNumber, phone, balance } = req.body;
     if (!bankUsername || !bankPassword || !accountNumber || !phone) {

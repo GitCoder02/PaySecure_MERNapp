@@ -101,7 +101,7 @@ const RegisterForm = () => {
             Register
           </Button>
 
-          {/* 👇 Go to Login Button */}
+          {/* Go to Login Button */}
           <Button
             variant="outlined"
             color="secondary"

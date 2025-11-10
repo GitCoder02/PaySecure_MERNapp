@@ -1,7 +1,7 @@
 // backend/middleware/validators.js
 const { body } = require("express-validator");
 
-// 🧾 Register Validation
+//  Register Validation
 exports.validateRegister = [
   body("name")
     .trim()
@@ -27,7 +27,7 @@ exports.validateRegister = [
     .withMessage("PIN must be exactly 4 digits"),
 ];
 
-// 🔐 Login Validation
+//  Login Validation
 exports.validateLogin = [
   body("email")
     .isEmail()
@@ -38,7 +38,7 @@ exports.validateLogin = [
     .withMessage("Password is required"),
 ];
 
-// 💳 Payment Validation (UPI / Card / Bank)
+//  Payment Validation (UPI / Card / Bank)
 exports.validatePayment = [
   body("amount")
     .isFloat({ gt: 0 })
@@ -93,7 +93,7 @@ exports.validatePayment = [
     .notEmpty().withMessage("Bank password is required"),
 ];
 
-// 🏦 Bank Transfer (Initiate OTP)
+// Bank Transfer (Initiate OTP)
 exports.validateBankInitiate = [
   body("bankUsername")
     .trim()
